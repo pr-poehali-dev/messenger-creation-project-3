@@ -1,106 +1,154 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
+
+interface User {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+  isOnline: boolean;
+  lastSeen?: string;
+}
 
 interface Chat {
   id: string;
-  name: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  isOnline: boolean;
-  avatar: string;
-  type: 'private' | 'group' | 'channel';
-  isEncrypted?: boolean;
+  participant: User;
+  lastMessage?: Message;
+  unreadCount: number;
+  createdAt: string;
 }
 
 interface Message {
   id: string;
   text: string;
-  time: string;
-  isOwn: boolean;
-  isEncrypted?: boolean;
+  senderId: string;
+  chatId: string;
+  timestamp: string;
+  isEncrypted: boolean;
 }
 
 export default function Index() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSection, setActiveSection] = useState('chats');
-  const [selectedChat, setSelectedChat] = useState<string | null>('1');
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const chats: Chat[] = [
-    {
-      id: '1',
-      name: 'Алексей Петров',
-      lastMessage: 'Привет! Как дела?',
-      time: '14:30',
-      unread: 2,
-      isOnline: true,
-      avatar: '👤',
-      type: 'private',
-      isEncrypted: true
-    },
-    {
-      id: '2',
-      name: 'Команда разработки',
-      lastMessage: 'Обновление готово',
-      time: '13:45',
-      unread: 5,
-      isOnline: false,
-      avatar: '👥',
-      type: 'group'
-    },
-    {
-      id: '3',
-      name: 'Новости технологий',
-      lastMessage: 'Новая версия React...',
-      time: '12:20',
-      unread: 0,
-      isOnline: false,
-      avatar: '📢',
-      type: 'channel'
-    },
-    {
-      id: '4',
-      name: 'Мария Иванова',
-      lastMessage: 'Спасибо за помощь!',
-      time: '11:15',
-      unread: 0,
-      isOnline: true,
-      avatar: '👩',
-      type: 'private',
-      isEncrypted: true
-    }
+  // Состояния для регистрации
+  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [registerData, setRegisterData] = useState({ username: '', displayName: '', password: '' });
+
+  // Моковые данные пользователей для демо
+  const mockUsers: User[] = [
+    { id: '2', username: 'alex_dev', displayName: 'Алексей Разработчик', avatar: '👨‍💻', isOnline: true },
+    { id: '3', username: 'maria_design', displayName: 'Мария Дизайнер', avatar: '👩‍🎨', isOnline: false, lastSeen: '2 часа назад' },
+    { id: '4', username: 'ivan_pm', displayName: 'Иван Менеджер', avatar: '👨‍💼', isOnline: true },
+    { id: '5', username: 'kate_qa', displayName: 'Катя Тестировщик', avatar: '👩‍🔬', isOnline: false, lastSeen: '1 день назад' },
   ];
 
-  const messages: Message[] = [
-    {
-      id: '1',
-      text: 'Привет! Как дела с проектом?',
-      time: '14:28',
-      isOwn: false,
-      isEncrypted: true
-    },
-    {
-      id: '2',
-      text: 'Всё отлично! Завтра презентация',
-      time: '14:29',
-      isOwn: true,
-      isEncrypted: true
-    },
-    {
-      id: '3',
-      text: 'Здорово! Удачи тебе 🚀',
-      time: '14:30',
-      isOwn: false,
-      isEncrypted: true
+  const handleLogin = () => {
+    if (loginData.username && loginData.password) {
+      const user: User = {
+        id: '1',
+        username: loginData.username,
+        displayName: loginData.username,
+        avatar: '😊',
+        isOnline: true
+      };
+      setCurrentUser(user);
+      setLoginData({ username: '', password: '' });
     }
-  ];
+  };
+
+  const handleRegister = () => {
+    if (registerData.username && registerData.displayName && registerData.password) {
+      const user: User = {
+        id: '1',
+        username: registerData.username,
+        displayName: registerData.displayName,
+        avatar: '😊',
+        isOnline: true
+      };
+      setCurrentUser(user);
+      setRegisterData({ username: '', displayName: '', password: '' });
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      const results = mockUsers.filter(user => 
+        user.username.toLowerCase().includes(query.toLowerCase()) ||
+        user.displayName.toLowerCase().includes(query.toLowerCase())
+      );
+      setSearchResults(results);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const startChat = (user: User) => {
+    const existingChat = chats.find(chat => chat.participant.id === user.id);
+    
+    if (existingChat) {
+      setSelectedChat(existingChat.id);
+    } else {
+      const newChat: Chat = {
+        id: `chat_${Date.now()}`,
+        participant: user,
+        unreadCount: 0,
+        createdAt: new Date().toISOString()
+      };
+      setChats(prev => [...prev, newChat]);
+      setSelectedChat(newChat.id);
+    }
+    setIsSearchOpen(false);
+    setSearchQuery('');
+  };
+
+  const handleSendMessage = () => {
+    if (messageText.trim() && selectedChat && currentUser) {
+      const newMessage: Message = {
+        id: `msg_${Date.now()}`,
+        text: messageText.trim(),
+        senderId: currentUser.id,
+        chatId: selectedChat,
+        timestamp: new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }),
+        isEncrypted: true
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
+      
+      // Обновляем последнее сообщение в чате
+      setChats(prev => prev.map(chat => 
+        chat.id === selectedChat 
+          ? { ...chat, lastMessage: newMessage }
+          : chat
+      ));
+      
+      setMessageText('');
+    }
+  };
+
+  const getCurrentChat = () => {
+    return chats.find(chat => chat.id === selectedChat);
+  };
+
+  const getChatMessages = () => {
+    return messages.filter(msg => msg.chatId === selectedChat);
+  };
 
   const sidebarSections = [
     { id: 'chats', name: 'Чаты', icon: 'MessageCircle' },
@@ -109,19 +157,67 @@ export default function Index() {
     { id: 'channels', name: 'Каналы', icon: 'Radio' }
   ];
 
-  const handleSendMessage = () => {
-    if (messageText.trim()) {
-      setMessageText('');
-    }
-  };
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-6">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
+              <Icon name="MessageCircle" size={32} className="text-primary-foreground" />
+            </div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Telegram</h1>
+            <p className="text-muted-foreground">Войдите или создайте аккаунт</p>
+          </div>
 
-  const getChatIcon = (type: string) => {
-    switch (type) {
-      case 'group': return 'Users';
-      case 'channel': return 'Radio';
-      default: return 'User';
-    }
-  };
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="login">Вход</TabsTrigger>
+              <TabsTrigger value="register">Регистрация</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="login" className="space-y-4">
+              <Input
+                placeholder="Имя пользователя"
+                value={loginData.username}
+                onChange={(e) => setLoginData(prev => ({ ...prev, username: e.target.value }))}
+              />
+              <Input
+                type="password"
+                placeholder="Пароль"
+                value={loginData.password}
+                onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+              />
+              <Button onClick={handleLogin} className="w-full">
+                Войти
+              </Button>
+            </TabsContent>
+            
+            <TabsContent value="register" className="space-y-4">
+              <Input
+                placeholder="Имя пользователя"
+                value={registerData.username}
+                onChange={(e) => setRegisterData(prev => ({ ...prev, username: e.target.value }))}
+              />
+              <Input
+                placeholder="Отображаемое имя"
+                value={registerData.displayName}
+                onChange={(e) => setRegisterData(prev => ({ ...prev, displayName: e.target.value }))}
+              />
+              <Input
+                type="password"
+                placeholder="Пароль"
+                value={registerData.password}
+                onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
+              />
+              <Button onClick={handleRegister} className="w-full">
+                Зарегистрироваться
+              </Button>
+            </TabsContent>
+          </Tabs>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -129,11 +225,32 @@ export default function Index() {
       <div className="w-80 bg-card border-r border-border flex flex-col">
         {/* Заголовок */}
         <div className="p-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Icon name="MessageCircle" size={18} className="text-primary-foreground" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <Icon name="MessageCircle" size={18} className="text-primary-foreground" />
+              </div>
+              <h1 className="text-xl font-semibold text-foreground">Telegram</h1>
             </div>
-            <h1 className="text-xl font-semibold text-foreground">Telegram</h1>
+            <Button variant="ghost" size="sm" onClick={() => setCurrentUser(null)}>
+              <Icon name="LogOut" size={16} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Профиль пользователя */}
+        <div className="p-3 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Avatar className="w-10 h-10">
+              <div className="w-full h-full flex items-center justify-center text-lg">
+                {currentUser.avatar}
+              </div>
+            </Avatar>
+            <div className="flex-1">
+              <p className="font-medium text-foreground text-sm">{currentUser.displayName}</p>
+              <p className="text-xs text-muted-foreground">@{currentUser.username}</p>
+            </div>
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
           </div>
         </div>
 
@@ -155,72 +272,139 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Поиск */}
-        <div className="px-3 pb-3">
-          <Input
-            placeholder="Поиск чатов..."
-            className="w-full"
-          />
+        {/* Поиск и новый чат */}
+        <div className="px-3 pb-3 flex gap-2">
+          <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="flex-1">
+                <Icon name="Search" size={16} className="mr-2" />
+                Найти людей
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Поиск пользователей</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Input
+                  placeholder="Введите имя или @username"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  autoFocus
+                />
+                <ScrollArea className="max-h-60">
+                  <div className="space-y-2">
+                    {searchResults.map((user) => (
+                      <Card
+                        key={user.id}
+                        className="p-3 cursor-pointer hover:bg-accent transition-colors"
+                        onClick={() => startChat(user)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <Avatar className="w-10 h-10">
+                              <div className="w-full h-full flex items-center justify-center text-lg">
+                                {user.avatar}
+                              </div>
+                            </Avatar>
+                            {user.isOnline && (
+                              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background"></div>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-foreground">{user.displayName}</p>
+                            <p className="text-xs text-muted-foreground">@{user.username}</p>
+                            {!user.isOnline && user.lastSeen && (
+                              <p className="text-xs text-muted-foreground">{user.lastSeen}</p>
+                            )}
+                          </div>
+                          {user.isOnline && (
+                            <Badge variant="secondary" className="text-xs">В сети</Badge>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                    {searchQuery && searchResults.length === 0 && (
+                      <p className="text-center text-muted-foreground py-4">
+                        Пользователи не найдены
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Список чатов */}
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {chats.map((chat) => (
-              <Card
-                key={chat.id}
-                className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
-                  selectedChat === chat.id ? 'bg-accent border-primary' : 'border-border'
-                }`}
-                onClick={() => setSelectedChat(chat.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Avatar className="w-12 h-12">
-                      <div className="w-full h-full flex items-center justify-center text-xl">
-                        {chat.avatar}
-                      </div>
-                    </Avatar>
-                    {chat.isOnline && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background"></div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-sm truncate text-foreground">
-                        {chat.name}
-                      </h3>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {chat.isEncrypted && (
-                          <Icon name="Shield" size={12} className="text-green-600" />
-                        )}
-                        <Icon name={getChatIcon(chat.type)} size={12} className="text-muted-foreground" />
-                      </div>
+            {chats.length === 0 ? (
+              <div className="text-center py-8">
+                <Icon name="MessageCircle" size={48} className="mx-auto text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground">
+                  Нет активных чатов
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Найдите людей и начните общение
+                </p>
+              </div>
+            ) : (
+              chats.map((chat) => (
+                <Card
+                  key={chat.id}
+                  className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
+                    selectedChat === chat.id ? 'bg-accent border-primary' : 'border-border'
+                  }`}
+                  onClick={() => setSelectedChat(chat.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar className="w-12 h-12">
+                        <div className="w-full h-full flex items-center justify-center text-xl">
+                          {chat.participant.avatar}
+                        </div>
+                      </Avatar>
+                      {chat.participant.isOnline && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background"></div>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {chat.lastMessage}
-                    </p>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-sm truncate text-foreground">
+                          {chat.participant.displayName}
+                        </h3>
+                        <Icon name="Shield" size={12} className="text-green-600" />
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {chat.lastMessage?.text || 'Начните общение'}
+                      </p>
+                    </div>
+                    
+                    <div className="text-right shrink-0">
+                      {chat.lastMessage && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {chat.lastMessage.timestamp}
+                        </p>
+                      )}
+                      {chat.unreadCount > 0 && (
+                        <Badge variant="default" className="text-xs px-2 py-1">
+                          {chat.unreadCount}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  
-                  <div className="text-right shrink-0">
-                    <p className="text-xs text-muted-foreground mb-1">{chat.time}</p>
-                    {chat.unread > 0 && (
-                      <Badge variant="default" className="text-xs px-2 py-1">
-                        {chat.unread}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))
+            )}
           </div>
         </ScrollArea>
       </div>
 
       {/* Область чата */}
       <div className="flex-1 flex flex-col">
-        {selectedChat ? (
+        {selectedChat && getCurrentChat() ? (
           <>
             {/* Заголовок чата */}
             <div className="p-4 border-b border-border bg-card">
@@ -228,23 +412,21 @@ export default function Index() {
                 <div className="flex items-center gap-3">
                   <Avatar className="w-10 h-10">
                     <div className="w-full h-full flex items-center justify-center text-lg">
-                      {chats.find(c => c.id === selectedChat)?.avatar}
+                      {getCurrentChat()?.participant.avatar}
                     </div>
                   </Avatar>
                   <div>
                     <h2 className="font-semibold text-foreground">
-                      {chats.find(c => c.id === selectedChat)?.name}
+                      {getCurrentChat()?.participant.displayName}
                     </h2>
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-muted-foreground">
-                        {chats.find(c => c.id === selectedChat)?.isOnline ? 'в сети' : 'был недавно'}
+                        {getCurrentChat()?.participant.isOnline ? 'в сети' : getCurrentChat()?.participant.lastSeen || 'был недавно'}
                       </p>
-                      {chats.find(c => c.id === selectedChat)?.isEncrypted && (
-                        <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                          <Icon name="Shield" size={10} />
-                          Зашифровано
-                        </Badge>
-                      )}
+                      <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                        <Icon name="Shield" size={10} />
+                        Зашифровано
+                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -266,29 +448,41 @@ export default function Index() {
             {/* Сообщения */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4 max-w-4xl">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
-                      message.isOwn
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
-                      <p className="text-sm">{message.text}</p>
-                      <div className="flex items-center justify-end gap-1 mt-1">
-                        <span className="text-xs opacity-70">{message.time}</span>
-                        {message.isOwn && (
-                          <Icon name="Check" size={12} className="opacity-70" />
-                        )}
-                        {message.isEncrypted && (
-                          <Icon name="Shield" size={10} className="opacity-70" />
-                        )}
+                {getChatMessages().length === 0 ? (
+                  <div className="text-center py-8">
+                    <Icon name="Lock" size={48} className="mx-auto text-green-600 mb-4" />
+                    <h3 className="font-semibold text-foreground mb-2">
+                      Зашифрованный чат
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
+                      Сообщения в этом чате защищены сквозным шифрованием
+                    </p>
+                  </div>
+                ) : (
+                  getChatMessages().map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.senderId === currentUser.id ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                        message.senderId === currentUser.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
+                        <p className="text-sm">{message.text}</p>
+                        <div className="flex items-center justify-end gap-1 mt-1">
+                          <span className="text-xs opacity-70">{message.timestamp}</span>
+                          {message.senderId === currentUser.id && (
+                            <Icon name="Check" size={12} className="opacity-70" />
+                          )}
+                          {message.isEncrypted && (
+                            <Icon name="Shield" size={10} className="opacity-70" />
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </ScrollArea>
 
@@ -305,7 +499,7 @@ export default function Index() {
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   className="flex-1"
                 />
-                <Button onClick={handleSendMessage} size="sm">
+                <Button onClick={handleSendMessage} size="sm" disabled={!messageText.trim()}>
                   <Icon name="Send" size={18} />
                 </Button>
               </div>
@@ -316,11 +510,15 @@ export default function Index() {
             <div className="text-center">
               <Icon name="MessageCircle" size={64} className="mx-auto text-muted-foreground mb-4" />
               <h3 className="text-xl font-semibold text-foreground mb-2">
-                Выберите чат
+                Добро пожаловать, {currentUser.displayName}!
               </h3>
-              <p className="text-muted-foreground">
-                Выберите чат из списка слева для начала общения
+              <p className="text-muted-foreground mb-4">
+                Найдите людей и начните общение
               </p>
+              <Button onClick={() => setIsSearchOpen(true)}>
+                <Icon name="Search" size={18} className="mr-2" />
+                Найти пользователей
+              </Button>
             </div>
           </div>
         )}
