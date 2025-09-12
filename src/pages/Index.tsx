@@ -491,7 +491,7 @@ export default function Index() {
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <Icon name="MessageCircle" size={18} className="text-primary-foreground" />
               </div>
-              <h1 className="text-xl font-semibold text-foreground">Telegram</h1>
+              <h1 className="text-xl font-semibold text-foreground">Obbo Massage</h1>
             </div>
             <Button variant="ghost" size="sm" onClick={() => {
               setCurrentUser(null);
