@@ -902,21 +902,31 @@ export default function Index() {
                 )}
               </div>
 
-              {selectedUserProfile.id !== currentUser?.id && (
-                <div className="flex gap-2 pt-4">
+              <div className="flex gap-2 pt-4">
+                {selectedUserProfile.id === currentUser?.id ? (
                   <Button onClick={() => {
-                    startChat(selectedUserProfile);
                     setIsProfileOpen(false);
+                    setIsSettingsOpen(true);
                   }} className="flex-1">
-                    <Icon name="MessageCircle" size={16} className="mr-2" />
-                    Написать
+                    <Icon name="Settings" size={16} className="mr-2" />
+                    Настройки
                   </Button>
-                  <Button variant="outline" className="flex-1">
-                    <Icon name="UserPlus" size={16} className="mr-2" />
-                    В друзья
-                  </Button>
-                </div>
-              )}
+                ) : (
+                  <>
+                    <Button onClick={() => {
+                      startChat(selectedUserProfile);
+                      setIsProfileOpen(false);
+                    }} className="flex-1">
+                      <Icon name="MessageCircle" size={16} className="mr-2" />
+                      Написать
+                    </Button>
+                    <Button variant="outline" className="flex-1">
+                      <Icon name="UserPlus" size={16} className="mr-2" />
+                      В друзья
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
