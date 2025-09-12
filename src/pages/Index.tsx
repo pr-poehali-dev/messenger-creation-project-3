@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
@@ -8,6 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
+import Cookies from 'js-cookie';
+import CryptoJS from 'crypto-js';
 
 interface User {
   id: string;
@@ -32,11 +34,16 @@ interface Chat {
 
 interface Message {
   id: string;
-  text: string;
+  text?: string;
   senderId: string;
   chatId: string;
   timestamp: string;
   isEncrypted: boolean;
+  type: 'text' | 'image' | 'voice';
+  imageUrl?: string;
+  voiceUrl?: string;
+  voiceDuration?: number;
+  encryptedData?: string;
 }
 
 export default function Index() {
@@ -52,14 +59,73 @@ export default function Index() {
   const [selectedUserProfile, setSelectedUserProfile] = useState<User | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Состояния для регистрации
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [registerData, setRegisterData] = useState({ username: '', displayName: '', password: '' });
 
-  // Простая система хранения данных (имитация localStorage)
+  // Ключ шифрования (в реальном приложении должен генерироваться безопасно)
+  const ENCRYPTION_KEY = 'telegram-secret-key-2024';
+
+  // Система шифрования
+  const encryptMessage = (message: string): string => {
+    return CryptoJS.AES.encrypt(message, ENCRYPTION_KEY).toString();
+  };
+
+  const decryptMessage = (encryptedMessage: string): string => {
+    try {
+      const bytes = CryptoJS.AES.decrypt(encryptedMessage, ENCRYPTION_KEY);
+      return bytes.toString(CryptoJS.enc.Utf8);
+    } catch (error) {
+      return 'Сообщение не удалось расшифровать';
+    }
+  };
+
+  // Система куки и хранения данных
+  const saveUserToCookies = (user: User) => {
+    Cookies.set('telegram_user', JSON.stringify(user), { expires: 30 }); // 30 дней
+  };
+
+  const loadUserFromCookies = (): User | null => {
+    const userCookie = Cookies.get('telegram_user');
+    return userCookie ? JSON.parse(userCookie) : null;
+  };
+
+  const clearUserCookies = () => {
+    Cookies.remove('telegram_user');
+  };
+
+  // Простая система хранения данных
   const saveUserData = (userData: User[]) => {
     localStorage.setItem('telegram_users', JSON.stringify(userData));
+  };
+
+  const saveMessages = (messages: Message[]) => {
+    // Шифруем сообщения перед сохранением
+    const encryptedMessages = messages.map(msg => ({
+      ...msg,
+      text: msg.text ? encryptMessage(msg.text) : undefined,
+      isEncrypted: true
+    }));
+    localStorage.setItem('telegram_messages', JSON.stringify(encryptedMessages));
+  };
+
+  const loadMessages = (): Message[] => {
+    const saved = localStorage.getItem('telegram_messages');
+    if (!saved) return [];
+    
+    const encryptedMessages: Message[] = JSON.parse(saved);
+    // Расшифровываем сообщения при загрузке
+    return encryptedMessages.map(msg => ({
+      ...msg,
+      text: msg.text ? decryptMessage(msg.text) : undefined
+    }));
   };
 
   const loadUserData = (): User[] => {
@@ -112,6 +178,23 @@ export default function Index() {
 
   const [mockUsers, setMockUsers] = useState<User[]>(loadUserData());
 
+  // Автоматический вход при загрузке
+  useEffect(() => {
+    const savedUser = loadUserFromCookies();
+    if (savedUser) {
+      setCurrentUser(savedUser);
+    }
+    // Загружаем сообщения
+    setMessages(loadMessages());
+  }, []);
+
+  // Сохраняем сообщения при изменении
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessages(messages);
+    }
+  }, [messages]);
+
   const updateUserProfile = (updatedUser: User) => {
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
@@ -134,6 +217,7 @@ export default function Index() {
         joinedAt: new Date().toISOString().split('T')[0]
       };
       setCurrentUser(user);
+      saveUserToCookies(user);
       setLoginData({ username: '', password: '' });
     }
   };
@@ -150,6 +234,7 @@ export default function Index() {
         joinedAt: new Date().toISOString().split('T')[0]
       };
       setCurrentUser(user);
+      saveUserToCookies(user);
       // Добавляем нового пользователя в список
       const updatedUsers = [...mockUsers, user];
       setMockUsers(updatedUsers);
@@ -190,6 +275,104 @@ export default function Index() {
     setSearchQuery('');
   };
 
+  // Обработка фото
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && selectedChat && currentUser) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        const newMessage: Message = {
+          id: `msg_${Date.now()}`,
+          senderId: currentUser.id,
+          chatId: selectedChat,
+          timestamp: new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }),
+          isEncrypted: true,
+          type: 'image',
+          imageUrl: imageUrl
+        };
+        
+        setMessages(prev => [...prev, newMessage]);
+        setChats(prev => prev.map(chat => 
+          chat.id === selectedChat 
+            ? { ...chat, lastMessage: { ...newMessage, text: '📷 Фото' } }
+            : chat
+        ));
+      };
+      reader.readAsDataURL(file);
+    }
+    // Сброс input
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  // Запись голосового сообщения
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        if (selectedChat && currentUser) {
+          const newMessage: Message = {
+            id: `msg_${Date.now()}`,
+            senderId: currentUser.id,
+            chatId: selectedChat,
+            timestamp: new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }),
+            isEncrypted: true,
+            type: 'voice',
+            voiceUrl: audioUrl,
+            voiceDuration: recordingTime
+          };
+          
+          setMessages(prev => [...prev, newMessage]);
+          setChats(prev => prev.map(chat => 
+            chat.id === selectedChat 
+              ? { ...chat, lastMessage: { ...newMessage, text: '🎤 Голосовое сообщение' } }
+              : chat
+          ));
+        }
+        
+        // Остановка всех треков
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Счетчик времени записи
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Ошибка доступа к микрофону:', error);
+      alert('Не удалось получить доступ к микрофону');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
   const handleSendMessage = () => {
     if (messageText.trim() && selectedChat && currentUser) {
       const newMessage: Message = {
@@ -198,7 +381,8 @@ export default function Index() {
         senderId: currentUser.id,
         chatId: selectedChat,
         timestamp: new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }),
-        isEncrypted: true
+        isEncrypted: true,
+        type: 'text'
       };
       
       setMessages(prev => [...prev, newMessage]);
@@ -309,7 +493,10 @@ export default function Index() {
               </div>
               <h1 className="text-xl font-semibold text-foreground">Telegram</h1>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setCurrentUser(null)}>
+            <Button variant="ghost" size="sm" onClick={() => {
+              setCurrentUser(null);
+              clearUserCookies();
+            }}>
               <Icon name="LogOut" size={16} />
             </Button>
           </div>
@@ -557,22 +744,10 @@ export default function Index() {
                       key={message.id}
                       className={`flex ${message.senderId === currentUser.id ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
-                        message.senderId === currentUser.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        <p className="text-sm">{message.text}</p>
-                        <div className="flex items-center justify-end gap-1 mt-1">
-                          <span className="text-xs opacity-70">{message.timestamp}</span>
-                          {message.senderId === currentUser.id && (
-                            <Icon name="Check" size={12} className="opacity-70" />
-                          )}
-                          {message.isEncrypted && (
-                            <Icon name="Shield" size={10} className="opacity-70" />
-                          )}
-                        </div>
-                      </div>
+                      <MessageBubble 
+                        message={message} 
+                        isOwn={message.senderId === currentUser.id}
+                      />
                     </div>
                   ))
                 )}
@@ -581,20 +756,74 @@ export default function Index() {
 
             {/* Ввод сообщения */}
             <div className="p-4 border-t border-border bg-card">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm">
-                  <Icon name="Paperclip" size={18} />
+              {isRecording && (
+                <div className="mb-3 p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                      <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                        Запись: {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+                      </span>
+                    </div>
+                    <Button onClick={stopRecording} size="sm" variant="outline">
+                      <Icon name="Square" size={16} className="mr-1" />
+                      Остановить
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2">
+                {/* Скрытый input для файлов */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                
+                {/* Кнопка для фото */}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Отправить фото"
+                >
+                  <Icon name="Image" size={18} />
                 </Button>
+                
                 <Input
                   placeholder="Напишите сообщение..."
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyPress={(e) => e.key === 'Enter' && !isRecording && handleSendMessage()}
                   className="flex-1"
+                  disabled={isRecording}
                 />
-                <Button onClick={handleSendMessage} size="sm" disabled={!messageText.trim()}>
-                  <Icon name="Send" size={18} />
+                
+                {/* Кнопка голосового сообщения */}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}
+                  title={isRecording ? 'Остановить запись' : 'Записать голосовое сообщение'}
+                >
+                  <Icon name={isRecording ? "Square" : "Mic"} size={18} />
                 </Button>
+                
+                {/* Кнопка отправки */}
+                {!isRecording && (
+                  <Button 
+                    onClick={handleSendMessage} 
+                    size="sm" 
+                    disabled={!messageText.trim()}
+                    title="Отправить сообщение"
+                  >
+                    <Icon name="Send" size={18} />
+                  </Button>
+                )}
               </div>
             </div>
           </>
@@ -843,6 +1072,101 @@ function ProfileSettings({ user, onUpdate, onClose }: ProfileSettingsProps) {
         <Button variant="outline" onClick={onClose} className="flex-1">
           Отмена
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// Компонент для отображения сообщений
+interface MessageBubbleProps {
+  message: Message;
+  isOwn: boolean;
+}
+
+function MessageBubble({ message, isOwn }: MessageBubbleProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  
+  const playVoiceMessage = () => {
+    if (message.voiceUrl) {
+      const audio = new Audio(message.voiceUrl);
+      setIsPlaying(true);
+      
+      audio.onended = () => setIsPlaying(false);
+      audio.onerror = () => {
+        setIsPlaying(false);
+        alert('Ошибка воспроизведения голосового сообщения');
+      };
+      
+      audio.play().catch(() => {
+        setIsPlaying(false);
+        alert('Не удалось воспроизвести голосовое сообщение');
+      });
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+      isOwn
+        ? 'bg-primary text-primary-foreground'
+        : 'bg-muted text-muted-foreground'
+    }`}>
+      {/* Текстовое сообщение */}
+      {message.type === 'text' && message.text && (
+        <p className="text-sm">{message.text}</p>
+      )}
+
+      {/* Фото */}
+      {message.type === 'image' && message.imageUrl && (
+        <div className="space-y-2">
+          <img 
+            src={message.imageUrl} 
+            alt="Изображение"
+            className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => window.open(message.imageUrl, '_blank')}
+          />
+        </div>
+      )}
+
+      {/* Голосовое сообщение */}
+      {message.type === 'voice' && message.voiceUrl && (
+        <div className="flex items-center gap-3 min-w-[200px]">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={playVoiceMessage}
+            disabled={isPlaying}
+            className={`rounded-full p-2 ${isOwn ? 'hover:bg-primary-foreground/20' : 'hover:bg-background/20'}`}
+          >
+            <Icon name={isPlaying ? "Pause" : "Play"} size={16} />
+          </Button>
+          
+          <div className="flex-1">
+            <div className={`h-1 rounded-full ${isOwn ? 'bg-primary-foreground/30' : 'bg-foreground/30'} relative`}>
+              <div className={`h-full rounded-full ${isOwn ? 'bg-primary-foreground' : 'bg-foreground'} w-0 transition-all duration-300`}></div>
+            </div>
+          </div>
+          
+          <span className="text-xs opacity-70">
+            {message.voiceDuration ? formatDuration(message.voiceDuration) : '0:00'}
+          </span>
+        </div>
+      )}
+
+      {/* Метаданные сообщения */}
+      <div className="flex items-center justify-end gap-1 mt-1">
+        <span className="text-xs opacity-70">{message.timestamp}</span>
+        {isOwn && (
+          <Icon name="Check" size={12} className="opacity-70" />
+        )}
+        {message.isEncrypted && (
+          <Icon name="Shield" size={10} className="opacity-70" />
+        )}
       </div>
     </div>
   );
