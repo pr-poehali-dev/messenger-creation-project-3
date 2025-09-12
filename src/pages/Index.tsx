@@ -426,7 +426,7 @@ export default function Index() {
             <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
               <Icon name="MessageCircle" size={32} className="text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Telegram</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">ChatX</h1>
             <p className="text-muted-foreground">Войдите или создайте аккаунт</p>
           </div>
 
@@ -491,7 +491,7 @@ export default function Index() {
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <Icon name="MessageCircle" size={18} className="text-primary-foreground" />
               </div>
-              <h1 className="text-xl font-semibold text-foreground">Telegram</h1>
+              <h1 className="text-xl font-semibold text-foreground">ChatX</h1>
             </div>
             <Button variant="ghost" size="sm" onClick={() => {
               setCurrentUser(null);
@@ -902,21 +902,31 @@ export default function Index() {
                 )}
               </div>
 
-              {selectedUserProfile.id !== currentUser?.id && (
-                <div className="flex gap-2 pt-4">
+              <div className="flex gap-2 pt-4">
+                {selectedUserProfile.id === currentUser?.id ? (
                   <Button onClick={() => {
-                    startChat(selectedUserProfile);
                     setIsProfileOpen(false);
+                    setIsSettingsOpen(true);
                   }} className="flex-1">
-                    <Icon name="MessageCircle" size={16} className="mr-2" />
-                    Написать
+                    <Icon name="Settings" size={16} className="mr-2" />
+                    Настройки
                   </Button>
-                  <Button variant="outline" className="flex-1">
-                    <Icon name="UserPlus" size={16} className="mr-2" />
-                    В друзья
-                  </Button>
-                </div>
-              )}
+                ) : (
+                  <>
+                    <Button onClick={() => {
+                      startChat(selectedUserProfile);
+                      setIsProfileOpen(false);
+                    }} className="flex-1">
+                      <Icon name="MessageCircle" size={16} className="mr-2" />
+                      Написать
+                    </Button>
+                    <Button variant="outline" className="flex-1">
+                      <Icon name="UserPlus" size={16} className="mr-2" />
+                      В друзья
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
