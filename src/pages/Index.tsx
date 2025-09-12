@@ -46,6 +46,29 @@ interface Message {
   encryptedData?: string;
 }
 
+interface Channel {
+  id: string;
+  name: string;
+  description?: string;
+  avatar: string;
+  ownerId: string;
+  subscribersCount: number;
+  createdAt: string;
+  isSubscribed?: boolean;
+}
+
+interface Post {
+  id: string;
+  channelId: string;
+  text?: string;
+  imageUrl?: string;
+  authorId: string;
+  timestamp: string;
+  likes: number;
+  views: number;
+  isLiked?: boolean;
+}
+
 export default function Index() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSection, setActiveSection] = useState('chats');
@@ -53,6 +76,14 @@ export default function Index() {
   const [messageText, setMessageText] = useState('');
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelDescription, setNewChannelDescription] = useState('');
+  const [newPostText, setNewPostText] = useState('');
+  const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -176,7 +207,82 @@ export default function Index() {
     ];
   };
 
+  const loadChannelData = (): Channel[] => {
+    const saved = localStorage.getItem('telegram_channels');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: 'ch1',
+        name: 'Новости Технологий',
+        description: 'Последние новости из мира IT',
+        avatar: '💻',
+        ownerId: '2',
+        subscribersCount: 1250,
+        createdAt: '2024-01-15',
+        isSubscribed: true
+      },
+      {
+        id: 'ch2', 
+        name: 'Кулинарные рецепты',
+        description: 'Вкусные рецепты каждый день',
+        avatar: '👨‍🍳',
+        ownerId: '3',
+        subscribersCount: 890,
+        createdAt: '2024-02-10',
+        isSubscribed: false
+      },
+      {
+        id: 'ch3',
+        name: 'Фотография',
+        description: 'Искусство фотографии и советы',
+        avatar: '📷',
+        ownerId: '4', 
+        subscribersCount: 2100,
+        createdAt: '2024-01-20',
+        isSubscribed: true
+      }
+    ];
+  };
+
+  const loadPostData = (): Post[] => {
+    const saved = localStorage.getItem('telegram_posts');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: 'p1',
+        channelId: 'ch1',
+        text: '🚀 Новая версия React 19 официально анонсирована! Основные улучшения: новые хуки, лучшая производительность и упрощённая работа с сервером.',
+        authorId: '2',
+        timestamp: '2024-09-12 10:30',
+        likes: 127,
+        views: 1250,
+        isLiked: true
+      },
+      {
+        id: 'p2', 
+        channelId: 'ch2',
+        text: '🍝 Идеальная паста карбонара за 15 минут!\n\nИнгредиенты:\n• Спагетти - 200г\n• Бекон - 100г\n• Яйца - 2шт\n• Пармезан - 50г\n• Чеснок - 2 зубчика',
+        imageUrl: '/api/placeholder/400/300',
+        authorId: '3',
+        timestamp: '2024-09-12 14:20',
+        likes: 89,
+        views: 650
+      },
+      {
+        id: 'p3',
+        channelId: 'ch3', 
+        text: '📸 Золотой час - лучшее время для портретной съёмки. Мягкий свет за час до заката создаёт волшебную атмосферу.',
+        imageUrl: '/api/placeholder/500/400',
+        authorId: '4',
+        timestamp: '2024-09-12 18:45',
+        likes: 203,
+        views: 890,
+        isLiked: true
+      }
+    ];
+  };
+
   const [mockUsers, setMockUsers] = useState<User[]>(loadUserData());
+  const [mockChannels, setMockChannels] = useState<Channel[]>(loadChannelData());
+  const [mockPosts, setMockPosts] = useState<Post[]>(loadPostData());
 
   // Автоматический вход при загрузке
   useEffect(() => {
@@ -186,7 +292,10 @@ export default function Index() {
     }
     // Загружаем сообщения
     setMessages(loadMessages());
-  }, []);
+    // Загружаем каналы и посты
+    setChannels(mockChannels);
+    setPosts(mockPosts);
+  }, [mockChannels, mockPosts]);
 
   // Сохраняем сообщения при изменении
   useEffect(() => {
@@ -411,9 +520,86 @@ export default function Index() {
     setIsProfileOpen(true);
   };
 
+  // Функции для управления каналами
+  const handleSubscribeChannel = (channelId: string) => {
+    setChannels(prev => prev.map(channel => {
+      if (channel.id === channelId) {
+        const isCurrentlySubscribed = channel.isSubscribed;
+        return {
+          ...channel,
+          isSubscribed: !isCurrentlySubscribed,
+          subscribersCount: channel.subscribersCount + (isCurrentlySubscribed ? -1 : 1)
+        };
+      }
+      return channel;
+    }));
+  };
+
+  const handleCreateChannel = () => {
+    if (!currentUser || !newChannelName.trim()) return;
+    
+    const newChannel: Channel = {
+      id: Date.now().toString(),
+      name: newChannelName,
+      description: newChannelDescription,
+      avatar: '📢',
+      ownerId: currentUser.id,
+      subscribersCount: 1,
+      createdAt: new Date().toISOString(),
+      isSubscribed: true
+    };
+
+    setChannels(prev => [newChannel, ...prev]);
+    setNewChannelName('');
+    setNewChannelDescription('');
+    setIsCreateChannelOpen(false);
+  };
+
+  const handleCreatePost = () => {
+    if (!currentUser || !selectedChannel || !newPostText.trim()) return;
+
+    const newPost: Post = {
+      id: Date.now().toString(),
+      channelId: selectedChannel,
+      text: newPostText,
+      authorId: currentUser.id,
+      timestamp: new Date().toLocaleString('ru-RU'),
+      likes: 0,
+      views: 1,
+      isLiked: false
+    };
+
+    setPosts(prev => [newPost, ...prev]);
+    setNewPostText('');
+    setIsCreatePostOpen(false);
+  };
+
+  const handleLikePost = (postId: string) => {
+    setPosts(prev => prev.map(post => {
+      if (post.id === postId) {
+        const isCurrentlyLiked = post.isLiked;
+        return {
+          ...post,
+          isLiked: !isCurrentlyLiked,
+          likes: post.likes + (isCurrentlyLiked ? -1 : 1)
+        };
+      }
+      return post;
+    }));
+  };
+
+  const getChannelPosts = (channelId: string) => {
+    return posts.filter(post => post.channelId === channelId).sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  };
+
+  const getCurrentChannel = () => {
+    return channels.find(channel => channel.id === selectedChannel);
+  };
+
   const sidebarSections = [
     { id: 'chats', name: 'Чаты', icon: 'MessageCircle' },
-    { id: 'settings', name: 'Настройки', icon: 'Settings', onClick: () => setIsSettingsOpen(true) },
     { id: 'profile', name: 'Профиль', icon: 'User', onClick: () => currentUser && showUserProfile(currentUser) },
     { id: 'channels', name: 'Каналы', icon: 'Radio' }
   ];
@@ -527,10 +713,9 @@ export default function Index() {
                 variant={activeSection === section.id ? "default" : "ghost"}
                 size="sm"
                 onClick={() => {
+                  setActiveSection(section.id);
                   if (section.onClick) {
                     section.onClick();
-                  } else {
-                    setActiveSection(section.id);
                   }
                 }}
                 className="flex-1 flex items-center gap-2"
@@ -542,15 +727,47 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Поиск и новый чат */}
+        {/* Поиск и новый чат/канал */}
         <div className="px-3 pb-3 flex gap-2">
-          <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1">
-                <Icon name="Search" size={16} className="mr-2" />
-                Найти людей
-              </Button>
-            </DialogTrigger>
+          {activeSection === 'channels' ? (
+            <>
+              <Dialog open={isCreateChannelOpen} onOpenChange={setIsCreateChannelOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Icon name="Plus" size={16} className="mr-2" />
+                    Создать канал
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Создать новый канал</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Input
+                      placeholder="Название канала"
+                      value={newChannelName}
+                      onChange={(e) => setNewChannelName(e.target.value)}
+                    />
+                    <Input
+                      placeholder="Описание канала (опционально)"
+                      value={newChannelDescription}
+                      onChange={(e) => setNewChannelDescription(e.target.value)}
+                    />
+                    <Button onClick={handleCreateChannel} className="w-full">
+                      Создать канал
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
+          ) : (
+            <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="flex-1">
+                  <Icon name="Search" size={16} className="mr-2" />
+                  Найти людей
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Поиск пользователей</DialogTitle>
@@ -611,69 +828,142 @@ export default function Index() {
               </div>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
         {/* Список чатов */}
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {chats.length === 0 ? (
-              <div className="text-center py-8">
-                <Icon name="MessageCircle" size={48} className="mx-auto text-muted-foreground mb-4" />
-                <p className="text-sm text-muted-foreground">
-                  Нет активных чатов
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Найдите людей и начните общение
-                </p>
-              </div>
-            ) : (
-              chats.map((chat) => (
-                <Card
-                  key={chat.id}
-                  className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
-                    selectedChat === chat.id ? 'bg-accent border-primary' : 'border-border'
-                  }`}
-                  onClick={() => setSelectedChat(chat.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <Avatar className="w-12 h-12">
-                        <div className="w-full h-full flex items-center justify-center text-xl">
-                          {chat.participant.avatar}
-                        </div>
-                      </Avatar>
-                      {chat.participant.isOnline && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background"></div>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-sm truncate text-foreground">
-                          {chat.participant.displayName}
-                        </h3>
-                        <Icon name="Shield" size={12} className="text-green-600" />
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {chat.lastMessage?.text || 'Начните общение'}
-                      </p>
-                    </div>
-                    
-                    <div className="text-right shrink-0">
-                      {chat.lastMessage && (
-                        <p className="text-xs text-muted-foreground mb-1">
-                          {chat.lastMessage.timestamp}
-                        </p>
-                      )}
-                      {chat.unreadCount > 0 && (
-                        <Badge variant="default" className="text-xs px-2 py-1">
-                          {chat.unreadCount}
-                        </Badge>
-                      )}
-                    </div>
+            {activeSection === 'channels' ? (
+              // Отображение каналов
+              <>
+                {channels.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Icon name="Radio" size={48} className="mx-auto text-muted-foreground mb-4" />
+                    <p className="text-sm text-muted-foreground">
+                      Нет каналов
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Создайте свой первый канал
+                    </p>
                   </div>
-                </Card>
-              ))
+                ) : (
+                  channels.map((channel) => (
+                    <Card
+                      key={channel.id}
+                      className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
+                        selectedChannel === channel.id ? 'bg-accent border-primary' : 'border-border'
+                      }`}
+                      onClick={() => setSelectedChannel(channel.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-12 h-12">
+                          <div className="w-full h-full flex items-center justify-center text-xl">
+                            {channel.avatar}
+                          </div>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-sm truncate text-foreground">
+                              {channel.name}
+                              {channel.ownerId === currentUser?.id && (
+                                <span className="ml-1">👑</span>
+                              )}
+                            </h3>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {channel.description}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="flex items-center gap-1 mb-1">
+                            <Icon name="Users" size={12} className="text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              {channel.subscribersCount}
+                            </span>
+                          </div>
+                          {channel.ownerId !== currentUser?.id && (
+                            <Button
+                              size="sm"
+                              variant={channel.isSubscribed ? "secondary" : "default"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSubscribeChannel(channel.id);
+                              }}
+                              className="h-6 px-2 text-xs"
+                            >
+                              {channel.isSubscribed ? 'Отписаться' : 'Подписаться'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </>
+            ) : (
+              // Отображение чатов
+              <>
+                {chats.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Icon name="MessageCircle" size={48} className="mx-auto text-muted-foreground mb-4" />
+                    <p className="text-sm text-muted-foreground">
+                      Нет активных чатов
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Найдите людей и начните общение
+                    </p>
+                  </div>
+                ) : (
+                  chats.map((chat) => (
+                    <Card
+                      key={chat.id}
+                      className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
+                        selectedChat === chat.id ? 'bg-accent border-primary' : 'border-border'
+                      }`}
+                      onClick={() => setSelectedChat(chat.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <Avatar className="w-12 h-12">
+                            <div className="w-full h-full flex items-center justify-center text-xl">
+                              {chat.participant.avatar}
+                            </div>
+                          </Avatar>
+                          {chat.participant.isOnline && (
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background"></div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-sm truncate text-foreground">
+                              {chat.participant.displayName}
+                            </h3>
+                            <Icon name="Shield" size={12} className="text-green-600" />
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {chat.lastMessage?.text || 'Начните общение'}
+                          </p>
+                        </div>
+                        
+                        <div className="text-right shrink-0">
+                          {chat.lastMessage && (
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {chat.lastMessage.timestamp}
+                            </p>
+                          )}
+                          {chat.unreadCount > 0 && (
+                            <Badge variant="default" className="text-xs px-2 py-1">
+                              {chat.unreadCount}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </>
             )}
           </div>
         </ScrollArea>
@@ -681,7 +971,155 @@ export default function Index() {
 
       {/* Область чата */}
       <div className="flex-1 flex flex-col">
-        {selectedChat && getCurrentChat() ? (
+        {activeSection === 'channels' && selectedChannel && getCurrentChannel() ? (
+          <>
+            {/* Заголовок канала */}
+            <div className="p-4 border-b border-border bg-card">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-12 h-12">
+                    <div className="w-full h-full flex items-center justify-center text-xl">
+                      {getCurrentChannel()?.avatar}
+                    </div>
+                  </Avatar>
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                      {getCurrentChannel()?.name}
+                      {getCurrentChannel()?.ownerId === currentUser?.id && (
+                        <span>👑</span>
+                      )}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {getCurrentChannel()?.description}
+                    </p>
+                    <div className="flex items-center gap-4 mt-1">
+                      <div className="flex items-center gap-1">
+                        <Icon name="Users" size={14} className="text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">
+                          {getCurrentChannel()?.subscribersCount} подписчиков
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {getCurrentChannel()?.ownerId === currentUser?.id && (
+                    <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm">
+                          <Icon name="Plus" size={16} className="mr-2" />
+                          Новый пост
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Создать пост</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <textarea
+                            placeholder="Напишите что-нибудь..."
+                            className="w-full h-32 p-3 border rounded-md resize-none"
+                            value={newPostText}
+                            onChange={(e) => setNewPostText(e.target.value)}
+                          />
+                          <Button onClick={handleCreatePost} className="w-full">
+                            Опубликовать
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                  {getCurrentChannel()?.ownerId !== currentUser?.id && (
+                    <Button
+                      size="sm"
+                      variant={getCurrentChannel()?.isSubscribed ? "secondary" : "default"}
+                      onClick={() => handleSubscribeChannel(selectedChannel!)}
+                    >
+                      {getCurrentChannel()?.isSubscribed ? 'Отписаться' : 'Подписаться'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Посты канала */}
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-4">
+                {getChannelPosts(selectedChannel).length === 0 ? (
+                  <div className="text-center py-8">
+                    <Icon name="FileText" size={48} className="mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground">В канале пока нет постов</p>
+                  </div>
+                ) : (
+                  getChannelPosts(selectedChannel).map((post) => (
+                    <Card key={post.id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Avatar className="w-10 h-10">
+                          <div className="w-full h-full flex items-center justify-center text-lg">
+                            {mockUsers.find(u => u.id === post.authorId)?.avatar || '👤'}
+                          </div>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-medium text-sm">
+                              {mockUsers.find(u => u.id === post.authorId)?.displayName || 'Пользователь'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {post.timestamp}
+                            </span>
+                          </div>
+                          {post.text && (
+                            <p className="text-sm text-foreground whitespace-pre-wrap mb-3">
+                              {post.text}
+                            </p>
+                          )}
+                          {post.imageUrl && (
+                            <img
+                              src={post.imageUrl}
+                              alt="Post image"
+                              className="max-w-full h-auto rounded-lg mb-3"
+                            />
+                          )}
+                          <div className="flex items-center gap-4">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleLikePost(post.id)}
+                              className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                            >
+                              <Icon 
+                                name={post.isLiked ? "Heart" : "Heart"} 
+                                size={16} 
+                                className={`mr-1 ${post.isLiked ? 'fill-red-500 text-red-500' : ''}`}
+                              />
+                              {post.likes}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-muted-foreground"
+                            >
+                              <Icon name="Eye" size={16} className="mr-1" />
+                              {post.views}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-muted-foreground"
+                            >
+                              <Icon name="Share" size={16} className="mr-1" />
+                              Поделиться
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </>
+        ) : selectedChat && getCurrentChat() ? (
           <>
             {/* Заголовок чата */}
             <div className="p-4 border-b border-border bg-card">
