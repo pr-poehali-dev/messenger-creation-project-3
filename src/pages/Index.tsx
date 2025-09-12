@@ -16,6 +16,10 @@ interface User {
   avatar: string;
   isOnline: boolean;
   lastSeen?: string;
+  bio?: string;
+  phone?: string;
+  email?: string;
+  joinedAt?: string;
 }
 
 interface Chat {
@@ -45,18 +49,78 @@ export default function Index() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [selectedUserProfile, setSelectedUserProfile] = useState<User | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Состояния для регистрации
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [registerData, setRegisterData] = useState({ username: '', displayName: '', password: '' });
 
-  // Моковые данные пользователей для демо
-  const mockUsers: User[] = [
-    { id: '2', username: 'alex_dev', displayName: 'Алексей Разработчик', avatar: '👨‍💻', isOnline: true },
-    { id: '3', username: 'maria_design', displayName: 'Мария Дизайнер', avatar: '👩‍🎨', isOnline: false, lastSeen: '2 часа назад' },
-    { id: '4', username: 'ivan_pm', displayName: 'Иван Менеджер', avatar: '👨‍💼', isOnline: true },
-    { id: '5', username: 'kate_qa', displayName: 'Катя Тестировщик', avatar: '👩‍🔬', isOnline: false, lastSeen: '1 день назад' },
-  ];
+  // Простая система хранения данных (имитация localStorage)
+  const saveUserData = (userData: User[]) => {
+    localStorage.setItem('telegram_users', JSON.stringify(userData));
+  };
+
+  const loadUserData = (): User[] => {
+    const saved = localStorage.getItem('telegram_users');
+    return saved ? JSON.parse(saved) : [
+      { 
+        id: '2', 
+        username: 'alex_dev', 
+        displayName: 'Алексей Разработчик', 
+        avatar: '👨‍💻', 
+        isOnline: true,
+        bio: 'Frontend разработчик с 5-летним опытом',
+        email: 'alex@example.com',
+        joinedAt: '2023-01-15'
+      },
+      { 
+        id: '3', 
+        username: 'maria_design', 
+        displayName: 'Мария Дизайнер', 
+        avatar: '👩‍🎨', 
+        isOnline: false, 
+        lastSeen: '2 часа назад',
+        bio: 'UI/UX дизайнер, создаю красивые интерфейсы',
+        email: 'maria@example.com',
+        joinedAt: '2023-02-20'
+      },
+      { 
+        id: '4', 
+        username: 'ivan_pm', 
+        displayName: 'Иван Менеджер', 
+        avatar: '👨‍💼', 
+        isOnline: true,
+        bio: 'Project Manager, люблю эффективность',
+        phone: '+7 (999) 123-45-67',
+        joinedAt: '2023-03-10'
+      },
+      { 
+        id: '5', 
+        username: 'kate_qa', 
+        displayName: 'Катя Тестировщик', 
+        avatar: '👩‍🔬', 
+        isOnline: false, 
+        lastSeen: '1 день назад',
+        bio: 'QA Engineer, ищу баги везде',
+        email: 'kate@example.com',
+        joinedAt: '2023-01-30'
+      },
+    ];
+  };
+
+  const [mockUsers, setMockUsers] = useState<User[]>(loadUserData());
+
+  const updateUserProfile = (updatedUser: User) => {
+    if (currentUser && currentUser.id === updatedUser.id) {
+      setCurrentUser(updatedUser);
+      // Обновляем в списке пользователей
+      const updatedUsers = mockUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
+      setMockUsers(updatedUsers);
+      saveUserData(updatedUsers);
+    }
+  };
 
   const handleLogin = () => {
     if (loginData.username && loginData.password) {
@@ -65,7 +129,9 @@ export default function Index() {
         username: loginData.username,
         displayName: loginData.username,
         avatar: '😊',
-        isOnline: true
+        isOnline: true,
+        bio: '',
+        joinedAt: new Date().toISOString().split('T')[0]
       };
       setCurrentUser(user);
       setLoginData({ username: '', password: '' });
@@ -75,13 +141,19 @@ export default function Index() {
   const handleRegister = () => {
     if (registerData.username && registerData.displayName && registerData.password) {
       const user: User = {
-        id: '1',
+        id: Date.now().toString(),
         username: registerData.username,
         displayName: registerData.displayName,
         avatar: '😊',
-        isOnline: true
+        isOnline: true,
+        bio: '',
+        joinedAt: new Date().toISOString().split('T')[0]
       };
       setCurrentUser(user);
+      // Добавляем нового пользователя в список
+      const updatedUsers = [...mockUsers, user];
+      setMockUsers(updatedUsers);
+      saveUserData(updatedUsers);
       setRegisterData({ username: '', displayName: '', password: '' });
     }
   };
@@ -150,10 +222,15 @@ export default function Index() {
     return messages.filter(msg => msg.chatId === selectedChat);
   };
 
+  const showUserProfile = (user: User) => {
+    setSelectedUserProfile(user);
+    setIsProfileOpen(true);
+  };
+
   const sidebarSections = [
     { id: 'chats', name: 'Чаты', icon: 'MessageCircle' },
-    { id: 'settings', name: 'Настройки', icon: 'Settings' },
-    { id: 'profile', name: 'Профиль', icon: 'User' },
+    { id: 'settings', name: 'Настройки', icon: 'Settings', onClick: () => setIsSettingsOpen(true) },
+    { id: 'profile', name: 'Профиль', icon: 'User', onClick: () => currentUser && showUserProfile(currentUser) },
     { id: 'channels', name: 'Каналы', icon: 'Radio' }
   ];
 
@@ -262,7 +339,13 @@ export default function Index() {
                 key={section.id}
                 variant={activeSection === section.id ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => {
+                  if (section.onClick) {
+                    section.onClick();
+                  } else {
+                    setActiveSection(section.id);
+                  }
+                }}
                 className="flex-1 flex items-center gap-2"
               >
                 <Icon name={section.icon as any} size={16} />
@@ -302,7 +385,14 @@ export default function Index() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="relative">
-                            <Avatar className="w-10 h-10">
+                            <Avatar 
+                              className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                showUserProfile(user);
+                                setIsSearchOpen(false);
+                              }}
+                            >
                               <div className="w-full h-full flex items-center justify-center text-lg">
                                 {user.avatar}
                               </div>
@@ -410,7 +500,10 @@ export default function Index() {
             <div className="p-4 border-b border-border bg-card">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10">
+                  <Avatar 
+                    className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                    onClick={() => getCurrentChat()?.participant && showUserProfile(getCurrentChat()!.participant)}
+                  >
                     <div className="w-full h-full flex items-center justify-center text-lg">
                       {getCurrentChat()?.participant.avatar}
                     </div>
@@ -522,6 +615,234 @@ export default function Index() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Модальное окно профиля */}
+      <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Профиль пользователя</DialogTitle>
+          </DialogHeader>
+          {selectedUserProfile && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="relative inline-block">
+                  <Avatar className="w-24 h-24 mx-auto mb-4">
+                    <div className="w-full h-full flex items-center justify-center text-4xl">
+                      {selectedUserProfile.avatar}
+                    </div>
+                  </Avatar>
+                  {selectedUserProfile.isOnline && (
+                    <div className="absolute bottom-3 right-3 w-6 h-6 bg-green-500 rounded-full border-4 border-background"></div>
+                  )}
+                </div>
+                <h2 className="text-xl font-bold text-foreground">{selectedUserProfile.displayName}</h2>
+                <p className="text-muted-foreground">@{selectedUserProfile.username}</p>
+                {selectedUserProfile.isOnline ? (
+                  <Badge variant="default" className="mt-2">В сети</Badge>
+                ) : selectedUserProfile.lastSeen && (
+                  <p className="text-sm text-muted-foreground mt-2">{selectedUserProfile.lastSeen}</p>
+                )}
+              </div>
+
+              {selectedUserProfile.bio && (
+                <div>
+                  <h3 className="font-semibold text-foreground mb-2">О себе</h3>
+                  <p className="text-muted-foreground">{selectedUserProfile.bio}</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {selectedUserProfile.email && (
+                  <div className="flex items-center gap-3">
+                    <Icon name="Mail" size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">{selectedUserProfile.email}</span>
+                  </div>
+                )}
+                {selectedUserProfile.phone && (
+                  <div className="flex items-center gap-3">
+                    <Icon name="Phone" size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">{selectedUserProfile.phone}</span>
+                  </div>
+                )}
+                {selectedUserProfile.joinedAt && (
+                  <div className="flex items-center gap-3">
+                    <Icon name="Calendar" size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-foreground">Регистрация: {new Date(selectedUserProfile.joinedAt).toLocaleDateString('ru')}</span>
+                  </div>
+                )}
+              </div>
+
+              {selectedUserProfile.id !== currentUser?.id && (
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={() => {
+                    startChat(selectedUserProfile);
+                    setIsProfileOpen(false);
+                  }} className="flex-1">
+                    <Icon name="MessageCircle" size={16} className="mr-2" />
+                    Написать
+                  </Button>
+                  <Button variant="outline" className="flex-1">
+                    <Icon name="UserPlus" size={16} className="mr-2" />
+                    В друзья
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Модальное окно настроек профиля */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Настройки профиля</DialogTitle>
+          </DialogHeader>
+          {currentUser && (
+            <ProfileSettings 
+              user={currentUser} 
+              onUpdate={updateUserProfile}
+              onClose={() => setIsSettingsOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Компонент для настроек профиля
+interface ProfileSettingsProps {
+  user: User;
+  onUpdate: (user: User) => void;
+  onClose: () => void;
+}
+
+function ProfileSettings({ user, onUpdate, onClose }: ProfileSettingsProps) {
+  const [formData, setFormData] = useState({
+    displayName: user.displayName,
+    bio: user.bio || '',
+    email: user.email || '',
+    phone: user.phone || '',
+    avatar: user.avatar
+  });
+  const [avatarInput, setAvatarInput] = useState('');
+
+  const handleSave = () => {
+    const updatedUser: User = {
+      ...user,
+      displayName: formData.displayName,
+      bio: formData.bio,
+      email: formData.email,
+      phone: formData.phone,
+      avatar: formData.avatar
+    };
+    onUpdate(updatedUser);
+    onClose();
+  };
+
+  const handleAvatarChange = () => {
+    if (avatarInput.trim()) {
+      setFormData(prev => ({ ...prev, avatar: avatarInput.trim() }));
+      setAvatarInput('');
+    }
+  };
+
+  const predefinedAvatars = ['😊', '😎', '🚀', '⭐', '🎯', '💎', '🔥', '⚡', '🌟', '🎨', '🎭', '🎪', '🎨', '👨‍💻', '👩‍💻', '👨‍🎨', '👩‍🎨', '👨‍💼', '👩‍💼', '👨‍🔬', '👩‍🔬'];
+
+  return (
+    <div className="space-y-4">
+      {/* Аватар */}
+      <div className="text-center">
+        <Avatar className="w-20 h-20 mx-auto mb-4">
+          <div className="w-full h-full flex items-center justify-center text-3xl">
+            {formData.avatar}
+          </div>
+        </Avatar>
+        
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Введите emoji или ссылку на картинку"
+              value={avatarInput}
+              onChange={(e) => setAvatarInput(e.target.value)}
+              className="flex-1"
+            />
+            <Button onClick={handleAvatarChange} size="sm">
+              <Icon name="Check" size={16} />
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-10 gap-1">
+            {predefinedAvatars.map((emoji, index) => (
+              <button
+                key={index}
+                onClick={() => setFormData(prev => ({ ...prev, avatar: emoji }))}
+                className="w-8 h-8 text-lg hover:bg-accent rounded transition-colors"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Основная информация */}
+      <div className="space-y-3">
+        <div>
+          <label className="text-sm font-medium text-foreground block mb-1">
+            Отображаемое имя
+          </label>
+          <Input
+            value={formData.displayName}
+            onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-foreground block mb-1">
+            О себе
+          </label>
+          <Input
+            placeholder="Расскажите о себе..."
+            value={formData.bio}
+            onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-foreground block mb-1">
+            Email
+          </label>
+          <Input
+            type="email"
+            placeholder="example@email.com"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-foreground block mb-1">
+            Телефон
+          </label>
+          <Input
+            placeholder="+7 (999) 123-45-67"
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-4">
+        <Button onClick={handleSave} className="flex-1">
+          <Icon name="Save" size={16} className="mr-2" />
+          Сохранить
+        </Button>
+        <Button variant="outline" onClick={onClose} className="flex-1">
+          Отмена
+        </Button>
       </div>
     </div>
   );
