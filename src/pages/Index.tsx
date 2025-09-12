@@ -612,7 +612,7 @@ export default function Index() {
             <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
               <Icon name="MessageCircle" size={32} className="text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Telegram</h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">ChatX</h1>
             <p className="text-muted-foreground">Войдите или создайте аккаунт</p>
           </div>
 
