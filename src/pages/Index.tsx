@@ -468,19 +468,6 @@ export default function Index() {
   };
 
   // Функции для управления каналами
-  const handleSubscribeChannel = (channelId: string) => {
-    setChannels(prev => prev.map(channel => {
-      if (channel.id === channelId) {
-        const isCurrentlySubscribed = channel.isSubscribed;
-        return {
-          ...channel,
-          isSubscribed: !isCurrentlySubscribed,
-          subscribersCount: channel.subscribersCount + (isCurrentlySubscribed ? -1 : 1)
-        };
-      }
-      return channel;
-    }));
-  };
 
   const handleCreateChannel = () => {
     if (!currentUser || !newChannelName.trim()) return;
