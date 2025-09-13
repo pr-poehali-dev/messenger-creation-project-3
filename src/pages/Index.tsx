@@ -836,7 +836,10 @@ export default function Index() {
               </div>
             </DialogContent>
           </Dialog>
-          )}\n          </div>\n        </div>\n        )}
+          )}
+          </div>
+        </div>
+        )}
 
         {/* Список чатов */}
         <ScrollArea className="flex-1">
