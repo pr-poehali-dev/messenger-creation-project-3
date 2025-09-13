@@ -167,19 +167,6 @@ export default function Index() {
   const loadUserData = (): User[] => {
     const saved = localStorage.getItem('telegram_users');
     return saved ? JSON.parse(saved) : [];
-      },
-      { 
-        id: '5', 
-        username: 'kate_qa', 
-        displayName: 'Катя Тестировщик', 
-        avatar: '👩‍🔬', 
-        isOnline: false, 
-        lastSeen: '1 день назад',
-        bio: 'QA Engineer, ищу баги везде',
-        email: 'kate@example.com',
-        joinedAt: '2023-01-30'
-      },
-    ];
   };
 
   const loadChannelData = (): Channel[] => {
