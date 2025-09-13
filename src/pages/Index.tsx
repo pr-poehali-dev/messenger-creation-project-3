@@ -49,6 +49,7 @@ interface Message {
 interface Channel {
   id: string;
   name: string;
+  username?: string;
   description?: string;
   avatar: string;
   ownerId: string;
@@ -71,7 +72,9 @@ interface Post {
 
 export default function Index() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeSection, setActiveSection] = useState('chats');
+  const [activeSection, setActiveSection] = useState('feed');
+  const [isMobile, setIsMobile] = useState(false);
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [messageText, setMessageText] = useState('');
   const [chats, setChats] = useState<Chat[]>([]);
@@ -80,7 +83,9 @@ export default function Index() {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelUsername, setNewChannelUsername] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
+  const [channelSearchQuery, setChannelSearchQuery] = useState('');
   const [newPostText, setNewPostText] = useState('');
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -161,37 +166,7 @@ export default function Index() {
 
   const loadUserData = (): User[] => {
     const saved = localStorage.getItem('telegram_users');
-    return saved ? JSON.parse(saved) : [
-      { 
-        id: '2', 
-        username: 'alex_dev', 
-        displayName: 'Алексей Разработчик', 
-        avatar: '👨‍💻', 
-        isOnline: true,
-        bio: 'Frontend разработчик с 5-летним опытом',
-        email: 'alex@example.com',
-        joinedAt: '2023-01-15'
-      },
-      { 
-        id: '3', 
-        username: 'maria_design', 
-        displayName: 'Мария Дизайнер', 
-        avatar: '👩‍🎨', 
-        isOnline: false, 
-        lastSeen: '2 часа назад',
-        bio: 'UI/UX дизайнер, создаю красивые интерфейсы',
-        email: 'maria@example.com',
-        joinedAt: '2023-02-20'
-      },
-      { 
-        id: '4', 
-        username: 'ivan_pm', 
-        displayName: 'Иван Менеджер', 
-        avatar: '👨‍💼', 
-        isOnline: true,
-        bio: 'Project Manager, люблю эффективность',
-        phone: '+7 (999) 123-45-67',
-        joinedAt: '2023-03-10'
+    return saved ? JSON.parse(saved) : [];
       },
       { 
         id: '5', 
@@ -245,39 +220,7 @@ export default function Index() {
 
   const loadPostData = (): Post[] => {
     const saved = localStorage.getItem('telegram_posts');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'p1',
-        channelId: 'ch1',
-        text: '🚀 Новая версия React 19 официально анонсирована! Основные улучшения: новые хуки, лучшая производительность и упрощённая работа с сервером.',
-        authorId: '2',
-        timestamp: '2024-09-12 10:30',
-        likes: 127,
-        views: 1250,
-        isLiked: true
-      },
-      {
-        id: 'p2', 
-        channelId: 'ch2',
-        text: '🍝 Идеальная паста карбонара за 15 минут!\n\nИнгредиенты:\n• Спагетти - 200г\n• Бекон - 100г\n• Яйца - 2шт\n• Пармезан - 50г\n• Чеснок - 2 зубчика',
-        imageUrl: '/api/placeholder/400/300',
-        authorId: '3',
-        timestamp: '2024-09-12 14:20',
-        likes: 89,
-        views: 650
-      },
-      {
-        id: 'p3',
-        channelId: 'ch3', 
-        text: '📸 Золотой час - лучшее время для портретной съёмки. Мягкий свет за час до заката создаёт волшебную атмосферу.',
-        imageUrl: '/api/placeholder/500/400',
-        authorId: '4',
-        timestamp: '2024-09-12 18:45',
-        likes: 203,
-        views: 890,
-        isLiked: true
-      }
-    ];
+    return saved ? JSON.parse(saved) : [];
   };
 
   const [mockUsers, setMockUsers] = useState<User[]>(loadUserData());
@@ -296,6 +239,23 @@ export default function Index() {
     setChannels(mockChannels);
     setPosts(mockPosts);
   }, [mockChannels, mockPosts]);
+
+  // Адаптивность
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileView = window.innerWidth < 768;
+      setIsMobile(isMobileView);
+      if (isMobileView && (selectedChat || selectedChannel)) {
+        setShowLeftPanel(false);
+      } else if (!isMobileView) {
+        setShowLeftPanel(true);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [selectedChat, selectedChannel]);
 
   // Сохраняем сообщения при изменении
   useEffect(() => {
@@ -541,6 +501,7 @@ export default function Index() {
     const newChannel: Channel = {
       id: Date.now().toString(),
       name: newChannelName,
+      username: newChannelUsername || undefined,
       description: newChannelDescription,
       avatar: '📢',
       ownerId: currentUser.id,
@@ -549,8 +510,12 @@ export default function Index() {
       isSubscribed: true
     };
 
-    setChannels(prev => [newChannel, ...prev]);
+    const updatedChannels = [newChannel, ...channels];
+    setChannels(updatedChannels);
+    localStorage.setItem('telegram_channels', JSON.stringify(updatedChannels));
+    
     setNewChannelName('');
+    setNewChannelUsername('');
     setNewChannelDescription('');
     setIsCreateChannelOpen(false);
   };
@@ -569,13 +534,15 @@ export default function Index() {
       isLiked: false
     };
 
-    setPosts(prev => [newPost, ...prev]);
+    const updatedPosts = [newPost, ...posts];
+    setPosts(updatedPosts);
+    localStorage.setItem('telegram_posts', JSON.stringify(updatedPosts));
     setNewPostText('');
     setIsCreatePostOpen(false);
   };
 
   const handleLikePost = (postId: string) => {
-    setPosts(prev => prev.map(post => {
+    const updatedPosts = posts.map(post => {
       if (post.id === postId) {
         const isCurrentlyLiked = post.isLiked;
         return {
@@ -585,7 +552,9 @@ export default function Index() {
         };
       }
       return post;
-    }));
+    });
+    setPosts(updatedPosts);
+    localStorage.setItem('telegram_posts', JSON.stringify(updatedPosts));
   };
 
   const getChannelPosts = (channelId: string) => {
@@ -598,10 +567,47 @@ export default function Index() {
     return channels.find(channel => channel.id === selectedChannel);
   };
 
+  const handleSubscribeChannel = (channelId: string) => {
+    const updatedChannels = channels.map(channel => {
+      if (channel.id === channelId) {
+        const isCurrentlySubscribed = channel.isSubscribed;
+        return {
+          ...channel,
+          isSubscribed: !isCurrentlySubscribed,
+          subscribersCount: channel.subscribersCount + (isCurrentlySubscribed ? -1 : 1)
+        };
+      }
+      return channel;
+    });
+    setChannels(updatedChannels);
+    localStorage.setItem('telegram_channels', JSON.stringify(updatedChannels));
+  };
+
+  const getSubscribedChannels = () => {
+    return channels.filter(channel => channel.isSubscribed);
+  };
+
+  const getFeedPosts = () => {
+    const subscribedChannelIds = getSubscribedChannels().map(ch => ch.id);
+    return posts
+      .filter(post => subscribedChannelIds.includes(post.channelId))
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  };
+
+  const getFilteredChannels = () => {
+    return channels.filter(channel => {
+      const matchesSearch = channel.name.toLowerCase().includes(channelSearchQuery.toLowerCase()) ||
+                           (channel.username && channel.username.toLowerCase().includes(channelSearchQuery.toLowerCase())) ||
+                           (channel.description && channel.description.toLowerCase().includes(channelSearchQuery.toLowerCase()));
+      return matchesSearch;
+    });
+  };
+
   const sidebarSections = [
+    { id: 'feed', name: 'Лента', icon: 'Home' },
     { id: 'chats', name: 'Чаты', icon: 'MessageCircle' },
-    { id: 'profile', name: 'Профиль', icon: 'User', onClick: () => currentUser && showUserProfile(currentUser) },
-    { id: 'channels', name: 'Каналы', icon: 'Radio' }
+    { id: 'channels', name: 'Каналы', icon: 'Radio' },
+    { id: 'profile', name: 'Профиль', icon: 'User', onClick: () => currentUser && showUserProfile(currentUser) }
   ];
 
   if (!currentUser) {
@@ -669,7 +675,7 @@ export default function Index() {
   return (
     <div className="flex h-screen bg-background">
       {/* Боковая панель */}
-      <div className="w-80 bg-card border-r border-border flex flex-col">
+      <div className={`${isMobile ? (showLeftPanel ? 'w-full' : 'hidden') : 'w-80'} bg-card border-r border-border flex flex-col`}>
         {/* Заголовок */}
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between">
@@ -728,7 +734,17 @@ export default function Index() {
         </div>
 
         {/* Поиск и новый чат/канал */}
-        <div className="px-3 pb-3 flex gap-2">
+        {activeSection !== 'feed' && (
+        <div className="px-3 pb-3 space-y-2">
+          {activeSection === 'channels' && (
+            <Input
+              placeholder="Поиск каналов..."
+              value={channelSearchQuery}
+              onChange={(e) => setChannelSearchQuery(e.target.value)}
+              className="w-full"
+            />
+          )}
+          <div className="flex gap-2">
           {activeSection === 'channels' ? (
             <>
               <Dialog open={isCreateChannelOpen} onOpenChange={setIsCreateChannelOpen}>
@@ -747,6 +763,11 @@ export default function Index() {
                       placeholder="Название канала"
                       value={newChannelName}
                       onChange={(e) => setNewChannelName(e.target.value)}
+                    />
+                    <Input
+                      placeholder="Username канала (@опционально)"
+                      value={newChannelUsername}
+                      onChange={(e) => setNewChannelUsername(e.target.value.replace('@', ''))}
                     />
                     <Input
                       placeholder="Описание канала (опционально)"
@@ -828,16 +849,62 @@ export default function Index() {
               </div>
             </DialogContent>
           </Dialog>
-          )}
-        </div>
+          )}\n          </div>\n        </div>\n        )}
 
         {/* Список чатов */}
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {activeSection === 'channels' ? (
+            {activeSection === 'feed' ? (
+              // Новостная лента
+              <>
+                <div className="px-2 py-1">
+                  <h3 className="text-sm font-medium text-muted-foreground">Новостная лента</h3>
+                </div>
+                {getFeedPosts().length === 0 ? (
+                  <div className="text-center py-8">
+                    <Icon name="Home" size={48} className="mx-auto text-muted-foreground mb-4" />
+                    <p className="text-sm text-muted-foreground">Подпишитесь на каналы чтобы видеть посты</p>
+                  </div>
+                ) : (
+                  getFeedPosts().slice(0, 10).map((post) => {
+                    const channel = channels.find(ch => ch.id === post.channelId);
+                    const author = mockUsers.find(u => u.id === post.authorId) || currentUser;
+                    return (
+                      <Card key={post.id} className="p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="w-6 h-6">
+                              <div className="w-full h-full flex items-center justify-center text-sm">
+                                {channel?.avatar || '📢'}
+                              </div>
+                            </Avatar>
+                            <span className="text-xs font-medium text-foreground">{channel?.name}</span>
+                            <span className="text-xs text-muted-foreground">•</span>
+                            <span className="text-xs text-muted-foreground">{post.timestamp}</span>
+                          </div>
+                          {post.text && (
+                            <p className="text-sm text-foreground line-clamp-3">{post.text}</p>
+                          )}
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Icon name="Heart" size={12} />
+                              <span>{post.likes}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Icon name="Eye" size={12} />
+                              <span>{post.views}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })
+                )}
+              </>
+            ) : activeSection === 'channels' ? (
               // Отображение каналов
               <>
-                {channels.length === 0 ? (
+                {getFilteredChannels().length === 0 ? (
                   <div className="text-center py-8">
                     <Icon name="Radio" size={48} className="mx-auto text-muted-foreground mb-4" />
                     <p className="text-sm text-muted-foreground">
@@ -848,13 +915,16 @@ export default function Index() {
                     </p>
                   </div>
                 ) : (
-                  channels.map((channel) => (
+                  getFilteredChannels().map((channel) => (
                     <Card
                       key={channel.id}
                       className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
                         selectedChannel === channel.id ? 'bg-accent border-primary' : 'border-border'
                       }`}
-                      onClick={() => setSelectedChannel(channel.id)}
+                      onClick={() => {
+                        setSelectedChannel(channel.id);
+                        if (isMobile) setShowLeftPanel(false);
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="w-12 h-12">
@@ -921,7 +991,10 @@ export default function Index() {
                       className={`p-3 cursor-pointer transition-colors hover:bg-accent/50 ${
                         selectedChat === chat.id ? 'bg-accent border-primary' : 'border-border'
                       }`}
-                      onClick={() => setSelectedChat(chat.id)}
+                      onClick={() => {
+                        setSelectedChat(chat.id);
+                        if (isMobile) setShowLeftPanel(false);
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
@@ -970,28 +1043,52 @@ export default function Index() {
       </div>
 
       {/* Область чата */}
-      <div className="flex-1 flex flex-col">
+      <div className={`${isMobile ? (showLeftPanel ? 'hidden' : 'w-full') : 'flex-1'} flex flex-col`}>
+        {/* Мобильная кнопка назад */}
+        {isMobile && !showLeftPanel && (
+          <div className="p-3 border-b border-border">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowLeftPanel(true);
+                setSelectedChat(null);
+                setSelectedChannel(null);
+              }}
+            >
+              <Icon name="ArrowLeft" size={16} className="mr-2" />
+              Назад
+            </Button>
+          </div>
+        )}
         {activeSection === 'channels' && selectedChannel && getCurrentChannel() ? (
           <>
             {/* Заголовок канала */}
             <div className="p-4 border-b border-border bg-card">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-12 h-12">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'}`}>
                     <div className="w-full h-full flex items-center justify-center text-xl">
                       {getCurrentChannel()?.avatar}
                     </div>
                   </Avatar>
-                  <div>
-                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                      {getCurrentChannel()?.name}
+                  <div className="min-w-0 flex-1">
+                    <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-foreground flex items-center gap-2`}>
+                      <span className="truncate">{getCurrentChannel()?.name}</span>
                       {getCurrentChannel()?.ownerId === currentUser?.id && (
                         <span>👑</span>
                       )}
                     </h2>
-                    <p className="text-sm text-muted-foreground">
-                      {getCurrentChannel()?.description}
-                    </p>
+                    {getCurrentChannel()?.username && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        @{getCurrentChannel()?.username}
+                      </p>
+                    )}
+                    {!isMobile && getCurrentChannel()?.description && (
+                      <p className="text-sm text-muted-foreground truncate">
+                        {getCurrentChannel()?.description}
+                      </p>
+                    )}
                     <div className="flex items-center gap-4 mt-1">
                       <div className="flex items-center gap-1">
                         <Icon name="Users" size={14} className="text-muted-foreground" />
@@ -1002,7 +1099,7 @@ export default function Index() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   {getCurrentChannel()?.ownerId === currentUser?.id && (
                     <Dialog open={isCreatePostOpen} onOpenChange={setIsCreatePostOpen}>
                       <DialogTrigger asChild>
@@ -1268,17 +1365,49 @@ export default function Index() {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <Icon name="MessageCircle" size={64} className="mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">
-                Добро пожаловать, {currentUser.displayName}!
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Найдите людей и начните общение
-              </p>
-              <Button onClick={() => setIsSearchOpen(true)}>
-                <Icon name="Search" size={18} className="mr-2" />
-                Найти пользователей
-              </Button>
+              {activeSection === 'feed' ? (
+                <>
+                  <Icon name="Home" size={64} className="mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    Новостная лента
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    Подпишитесь на каналы, чтобы видеть их посты здесь
+                  </p>
+                  <Button onClick={() => setActiveSection('channels')}>
+                    <Icon name="Radio" size={18} className="mr-2" />
+                    Найти каналы
+                  </Button>
+                </>
+              ) : activeSection === 'channels' ? (
+                <>
+                  <Icon name="Radio" size={64} className="mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    Каналы
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    Создайте свой канал или найдите интересные каналы
+                  </p>
+                  <Button onClick={() => setIsCreateChannelOpen(true)}>
+                    <Icon name="Plus" size={18} className="mr-2" />
+                    Создать канал
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Icon name="MessageCircle" size={64} className="mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    Добро пожаловать, {currentUser.displayName}!
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    Найдите людей и начните общение
+                  </p>
+                  <Button onClick={() => setIsSearchOpen(true)}>
+                    <Icon name="Search" size={18} className="mr-2" />
+                    Найти пользователей
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
