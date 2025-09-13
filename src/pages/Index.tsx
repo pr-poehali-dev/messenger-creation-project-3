@@ -86,6 +86,12 @@ export default function Index() {
   const [newChannelUsername, setNewChannelUsername] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
   const [channelSearchQuery, setChannelSearchQuery] = useState('');
+  const [isChannelSettingsOpen, setIsChannelSettingsOpen] = useState(false);
+  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [editChannelName, setEditChannelName] = useState('');
+  const [editChannelUsername, setEditChannelUsername] = useState('');
+  const [editChannelDescription, setEditChannelDescription] = useState('');
+  const [editChannelAvatar, setEditChannelAvatar] = useState('');
   const [newPostText, setNewPostText] = useState('');
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -101,6 +107,7 @@ export default function Index() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const channelAvatarInputRef = useRef<HTMLInputElement>(null);
 
   // Состояния для регистрации
   const [loginData, setLoginData] = useState({ username: '', password: '' });
@@ -171,38 +178,7 @@ export default function Index() {
 
   const loadChannelData = (): Channel[] => {
     const saved = localStorage.getItem('telegram_channels');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'ch1',
-        name: 'Новости Технологий',
-        description: 'Последние новости из мира IT',
-        avatar: '💻',
-        ownerId: '2',
-        subscribersCount: 1250,
-        createdAt: '2024-01-15',
-        isSubscribed: true
-      },
-      {
-        id: 'ch2', 
-        name: 'Кулинарные рецепты',
-        description: 'Вкусные рецепты каждый день',
-        avatar: '👨‍🍳',
-        ownerId: '3',
-        subscribersCount: 890,
-        createdAt: '2024-02-10',
-        isSubscribed: false
-      },
-      {
-        id: 'ch3',
-        name: 'Фотография',
-        description: 'Искусство фотографии и советы',
-        avatar: '📷',
-        ownerId: '4', 
-        subscribersCount: 2100,
-        createdAt: '2024-01-20',
-        isSubscribed: true
-      }
-    ];
+    return saved ? JSON.parse(saved) : [];
   };
 
   const loadPostData = (): Post[] => {
@@ -577,6 +553,52 @@ export default function Index() {
     });
   };
 
+  const openChannelSettings = (channel: Channel) => {
+    setEditingChannelId(channel.id);
+    setEditChannelName(channel.name);
+    setEditChannelUsername(channel.username || '');
+    setEditChannelDescription(channel.description || '');
+    setEditChannelAvatar(channel.avatar);
+    setIsChannelSettingsOpen(true);
+  };
+
+  const handleChannelAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setEditChannelAvatar(result);
+      };
+      reader.readAsDataURL(file);
+    }
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  const handleUpdateChannel = () => {
+    if (!editingChannelId || !editChannelName.trim()) return;
+
+    const updatedChannels = channels.map(channel => {
+      if (channel.id === editingChannelId) {
+        return {
+          ...channel,
+          name: editChannelName.trim(),
+          username: editChannelUsername.trim() || undefined,
+          description: editChannelDescription.trim() || undefined,
+          avatar: editChannelAvatar
+        };
+      }
+      return channel;
+    });
+
+    setChannels(updatedChannels);
+    localStorage.setItem('telegram_channels', JSON.stringify(updatedChannels));
+    setIsChannelSettingsOpen(false);
+    setEditingChannelId(null);
+  };
+
   const sidebarSections = [
     { id: 'feed', name: 'Лента', icon: 'Home' },
     { id: 'chats', name: 'Чаты', icon: 'MessageCircle' },
@@ -862,12 +884,24 @@ export default function Index() {
                           {post.text && (
                             <p className="text-sm text-foreground line-clamp-3">{post.text}</p>
                           )}
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Icon name="Heart" size={12} />
+                          <div className="flex items-center gap-3 text-xs">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLikePost(post.id);
+                              }}
+                              className="h-6 px-1 text-muted-foreground hover:text-red-500 transition-colors"
+                            >
+                              <Icon 
+                                name="Heart" 
+                                size={12} 
+                                className={`mr-1 ${post.isLiked ? 'fill-red-500 text-red-500' : ''}`}
+                              />
                               <span>{post.likes}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
+                            </Button>
+                            <div className="flex items-center gap-1 text-muted-foreground">
                               <Icon name="Eye" size={12} />
                               <span>{post.views}</span>
                             </div>
@@ -929,7 +963,20 @@ export default function Index() {
                               {channel.subscribersCount}
                             </span>
                           </div>
-                          {channel.ownerId !== currentUser?.id && (
+                          {channel.ownerId === currentUser?.id ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openChannelSettings(channel);
+                              }}
+                              className="h-6 px-2 text-xs"
+                            >
+                              <Icon name="Settings" size={12} className="mr-1" />
+                              Настройки
+                            </Button>
+                          ) : (
                             <Button
                               size="sm"
                               variant={channel.isSubscribed ? "secondary" : "default"}
@@ -1374,15 +1421,11 @@ export default function Index() {
                 <>
                   <Icon name="MessageCircle" size={64} className="mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-xl font-semibold text-foreground mb-2">
-                    Добро пожаловать, {currentUser.displayName}!
+                    Чаты
                   </h3>
                   <p className="text-muted-foreground mb-4">
-                    Найдите людей и начните общение
+                    Здесь будут отображаться ваши личные чаты
                   </p>
-                  <Button onClick={() => setIsSearchOpen(true)}>
-                    <Icon name="Search" size={18} className="mr-2" />
-                    Найти пользователей
-                  </Button>
                 </>
               )}
             </div>
@@ -1479,6 +1522,87 @@ export default function Index() {
               onClose={() => setIsSettingsOpen(false)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Модальное окно настроек канала */}
+      <Dialog open={isChannelSettingsOpen} onOpenChange={setIsChannelSettingsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Настройки канала</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Аватар канала */}
+            <div className="text-center">
+              <Avatar className="w-20 h-20 mx-auto mb-4">
+                {editChannelAvatar.startsWith('data:') ? (
+                  <img 
+                    src={editChannelAvatar} 
+                    alt="Channel avatar" 
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-3xl">
+                    {editChannelAvatar}
+                  </div>
+                )}
+              </Avatar>
+              <div className="flex gap-2 justify-center">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => channelAvatarInputRef.current?.click()}
+                >
+                  <Icon name="Upload" size={16} className="mr-2" />
+                  Загрузить фото
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setEditChannelAvatar('📢')}
+                >
+                  Сбросить
+                </Button>
+              </div>
+              <input
+                ref={channelAvatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleChannelAvatarUpload}
+                className="hidden"
+              />
+            </div>
+
+            {/* Поля редактирования */}
+            <Input
+              placeholder="Название канала"
+              value={editChannelName}
+              onChange={(e) => setEditChannelName(e.target.value)}
+            />
+            <Input
+              placeholder="Username канала (@опционально)"
+              value={editChannelUsername}
+              onChange={(e) => setEditChannelUsername(e.target.value.replace('@', ''))}
+            />
+            <Input
+              placeholder="Описание канала (опционально)"
+              value={editChannelDescription}
+              onChange={(e) => setEditChannelDescription(e.target.value)}
+            />
+            
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleUpdateChannel} className="flex-1">
+                Сохранить изменения
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsChannelSettingsOpen(false)}
+                className="flex-1"
+              >
+                Отмена
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
