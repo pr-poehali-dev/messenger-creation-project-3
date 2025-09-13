@@ -70,6 +70,17 @@ interface Post {
   isLiked?: boolean;
 }
 
+interface GroupChat {
+  id: string;
+  name: string;
+  description?: string;
+  avatar: string;
+  ownerId: string;
+  memberIds: string[];
+  inviteLink: string;
+  createdAt: string;
+}
+
 export default function Index() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSection, setActiveSection] = useState('feed');
@@ -92,6 +103,10 @@ export default function Index() {
   const [editChannelUsername, setEditChannelUsername] = useState('');
   const [editChannelDescription, setEditChannelDescription] = useState('');
   const [editChannelAvatar, setEditChannelAvatar] = useState('');
+  const [isCreateChatOpen, setIsCreateChatOpen] = useState(false);
+  const [newChatName, setNewChatName] = useState('');
+  const [newChatDescription, setNewChatDescription] = useState('');
+  const [chatInviteLink, setChatInviteLink] = useState('');
   const [newPostText, setNewPostText] = useState('');
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -599,11 +614,52 @@ export default function Index() {
     setEditingChannelId(null);
   };
 
+  const generateInviteLink = () => {
+    const randomString = Math.random().toString(36).substring(2, 15);
+    return `https://t.me/+${randomString}`;
+  };
+
+  const handleCreateGroupChat = () => {
+    if (!currentUser || !newChatName.trim()) return;
+
+    const inviteLink = generateInviteLink();
+    const newGroupChat: GroupChat = {
+      id: Date.now().toString(),
+      name: newChatName.trim(),
+      description: newChatDescription.trim() || undefined,
+      avatar: '👥',
+      ownerId: currentUser.id,
+      memberIds: [currentUser.id],
+      inviteLink: inviteLink,
+      createdAt: new Date().toISOString()
+    };
+
+    // Добавляем групповой чат в список чатов
+    const newChat: Chat = {
+      id: newGroupChat.id,
+      participant: {
+        id: newGroupChat.id,
+        username: newGroupChat.name.toLowerCase().replace(/\s+/g, '_'),
+        displayName: newGroupChat.name,
+        avatar: newGroupChat.avatar,
+        isOnline: true
+      },
+      unreadCount: 0,
+      createdAt: newGroupChat.createdAt
+    };
+
+    setChats(prev => [newChat, ...prev]);
+    setChatInviteLink(inviteLink);
+    setNewChatName('');
+    setNewChatDescription('');
+    setIsCreateChatOpen(false);
+  };
+
   const sidebarSections = [
     { id: 'feed', name: 'Лента', icon: 'Home' },
     { id: 'chats', name: 'Чаты', icon: 'MessageCircle' },
     { id: 'channels', name: 'Каналы', icon: 'Radio' },
-    { id: 'profile', name: 'Профиль', icon: 'User', onClick: () => currentUser && showUserProfile(currentUser) }
+    { id: 'profile', name: 'Профиль', icon: 'User', onClick: () => setIsSettingsOpen(true) }
   ];
 
   if (!currentUser) {
@@ -869,13 +925,21 @@ export default function Index() {
                     const channel = channels.find(ch => ch.id === post.channelId);
                     const author = mockUsers.find(u => u.id === post.authorId) || currentUser;
                     return (
-                      <Card key={post.id} className="p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                      <Card key={post.id} className="p-3">
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <Avatar className="w-6 h-6">
-                              <div className="w-full h-full flex items-center justify-center text-sm">
-                                {channel?.avatar || '📢'}
-                              </div>
+                              {channel?.avatar?.startsWith('data:') ? (
+                                <img 
+                                  src={channel.avatar} 
+                                  alt="Channel avatar" 
+                                  className="w-full h-full object-cover rounded-full"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-sm">
+                                  {channel?.avatar || '📢'}
+                                </div>
+                              )}
                             </Avatar>
                             <span className="text-xs font-medium text-foreground">{channel?.name}</span>
                             <span className="text-xs text-muted-foreground">•</span>
@@ -939,9 +1003,17 @@ export default function Index() {
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="w-12 h-12">
-                          <div className="w-full h-full flex items-center justify-center text-xl">
-                            {channel.avatar}
-                          </div>
+                          {channel.avatar?.startsWith('data:') ? (
+                            <img 
+                              src={channel.avatar} 
+                              alt="Channel avatar" 
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xl">
+                              {channel.avatar}
+                            </div>
+                          )}
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -1092,9 +1164,17 @@ export default function Index() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'}`}>
-                    <div className="w-full h-full flex items-center justify-center text-xl">
-                      {getCurrentChannel()?.avatar}
-                    </div>
+                    {getCurrentChannel()?.avatar?.startsWith('data:') ? (
+                      <img 
+                        src={getCurrentChannel()?.avatar} 
+                        alt="Channel avatar" 
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xl">
+                        {getCurrentChannel()?.avatar}
+                      </div>
+                    )}
                   </Avatar>
                   <div className="min-w-0 flex-1">
                     <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-foreground flex items-center gap-2`}>
@@ -1605,6 +1685,77 @@ export default function Index() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Модальное окно создания беседы */}
+      <Dialog open={isCreateChatOpen} onOpenChange={setIsCreateChatOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Создать беседу</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Название беседы"
+              value={newChatName}
+              onChange={(e) => setNewChatName(e.target.value)}
+            />
+            <Input
+              placeholder="Описание беседы (опционально)"
+              value={newChatDescription}
+              onChange={(e) => setNewChatDescription(e.target.value)}
+            />
+            
+            {chatInviteLink && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Ссылка для приглашения:</p>
+                <div className="flex gap-2">
+                  <Input 
+                    value={chatInviteLink} 
+                    readOnly 
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={() => navigator.clipboard.writeText(chatInviteLink)}
+                    size="sm"
+                  >
+                    <Icon name="Copy" size={16} />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Поделитесь этой ссылкой, чтобы пригласить участников
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleCreateGroupChat} className="flex-1">
+                <Icon name="Users" size={16} className="mr-2" />
+                Создать беседу
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsCreateChatOpen(false);
+                  setNewChatName('');
+                  setNewChatDescription('');
+                  setChatInviteLink('');
+                }}
+                className="flex-1"
+              >
+                Отмена
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Плавающая кнопка создания беседы */}
+      <Button
+        onClick={() => setIsCreateChatOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all z-50"
+        size="lg"
+      >
+        <Icon name="Edit" size={24} />
+      </Button>
     </div>
   );
 }
